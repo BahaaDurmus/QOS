@@ -45,7 +45,11 @@ def perfect_restoration_v3(model, frames_tensor, device):
     model.eval()
     with torch.no_grad():
         input_batch = frames_tensor.unsqueeze(0).to(device)
-        output = model(input_batch).squeeze(0).cpu()
+        if device.type == 'cuda':
+            input_batch = input_batch.half()
+            output = model(input_batch).squeeze(0).cpu().float()
+        else:
+            output = model(input_batch).squeeze(0).cpu()
         
     original_lq = frames_tensor[7].cpu() 
     
@@ -76,6 +80,11 @@ class MP4Restorer:
             self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
         except TypeError:
             self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            
+        if self.device.type == 'cuda':
+            self.model = self.model.half()
+            print("[*] Model FP16 (Yarı Hassasiyet) moduna alındı. Hız arttırıldı!")
+            
         print("[*] Model ağırlıkları başarıyla yüklendi!")
         
         # Orijinal çözünürlük korunur
