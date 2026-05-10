@@ -1,0 +1,24 @@
+# Modeller ve Ağırlıklar
+*.pth
+*.pt
+*.onnx
+
+# Videolar ve Büyük Dosyalar
+*.mp4
+*.avi
+*.mkv
+*.zip
+*.tar
+*.gz
+
+# Klasörler (Veri setleri, çıktılar vb.)
+dataset/
+dataset_vimeo/
+content/
+output/
+restored/
+
+# Python Önbellekleri
+__pycache__/
+*.pyc
+.env
