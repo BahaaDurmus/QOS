@@ -33,8 +33,14 @@ def main():
     ap = argparse.ArgumentParser(description="QoS Projesi - Tam Sistem Demosu")
     ap.add_argument("--video", required=True, help="Kaynak video (.mp4)")
     ap.add_argument("--model", default=None, help="VSR modeli (.pth)")
-    ap.add_argument("--profile", default="medium", choices=["perfect", "good", "medium", "poor", "critical"], help="Ağ zorluk profili")
-    ap.add_argument("--display", action="store_true", help="Canlı video pencerelerini aç")
+    ap.add_argument("--profile", default="medium", choices=["perfect", "good", "medium", "poor", "critical"])
+    ap.add_argument("--display", action="store_true")
+    # WiFi modu
+    ap.add_argument("--wifi", action="store_true", help="WMN yerine gercekci 802.11 WiFi simulatoru kullan")
+    ap.add_argument("--standard", default="802.11ac", choices=["802.11n","802.11ac","802.11ax"])
+    ap.add_argument("--freq", type=float, default=5.0, help="WiFi frekans bandi: 2.4 veya 5 GHz")
+    ap.add_argument("--distance", type=float, default=15.0, help="AP mesafesi (metre)")
+    ap.add_argument("--interferers", type=int, default=3, help="Girisimci cihaz sayisi")
     args = ap.parse_args()
 
     video_path = Path(args.video).resolve()
@@ -68,12 +74,28 @@ def main():
     threads = []
 
     try:
-        # 1. WMN Simülatörü
-        print(">> WMN Simulatoru Baslatiliyor (Profil: {})".format(args.profile))
-        wmn_cmd = [python, "streaming/wmn_simulator.py", "--listen", "9998", "--forward", "127.0.0.1:9999", "--profile", args.profile]
-        p_wmn = subprocess.Popen(wmn_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=base_dir, env=env)
-        processes.append((p_wmn, "WMN"))
+        # 1. Ag Simulatoru (WMN veya WiFi)
+        if args.wifi:
+            print(f">> WiFi Simulatoru Baslatiliyor ({args.standard} @ {args.freq}GHz, {args.distance}m)")
+            sim_cmd = [
+                python, "streaming/wifi_simulator.py",
+                "--listen", "9998", "--forward", "127.0.0.1:9999",
+                "--standard", args.standard,
+                "--freq", str(args.freq),
+                "--distance", str(args.distance),
+                "--interferers", str(args.interferers),
+            ]
+            sim_label = "WiFi"
+        else:
+            print(">> WMN Simulatoru Baslatiliyor (Profil: {})".format(args.profile))
+            sim_cmd = [python, "streaming/wmn_simulator.py",
+                       "--listen", "9998", "--forward", "127.0.0.1:9999",
+                       "--profile", args.profile]
+            sim_label = "WMN"
+        p_wmn = subprocess.Popen(sim_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=base_dir, env=env)
+        processes.append((p_wmn, sim_label))
         time.sleep(1)
+
 
         # 2. İstemci
         print(">> Istemci Baslatiliyor (Port 9999)")
