@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Karşılaştırma — QoS VSR</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#060d1a;color:#e2e8f0;font-family:'Inter',sans-serif;min-height:100vh;}
+header{background:rgba(15,23,42,0.96);border-bottom:1px solid rgba(99,102,241,0.3);
+  padding:16px 32px;display:flex;justify-content:space-between;align-items:center;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);}
+header h1{font-size:1.1rem;font-weight:800;background:linear-gradient(90deg,#818cf8,#34d399);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.nav a{text-decoration:none;font-size:0.8rem;font-weight:600;padding:7px 16px;
+  border-radius:8px;border:1px solid rgba(255,255,255,0.08);color:#94a3b8;margin-left:8px;transition:all 0.2s;}
+.nav a:hover,.nav a.active{color:#e0e7ff;background:rgba(99,102,241,0.15);border-color:rgba(99,102,241,0.4);}
+
+.container{max-width:1320px;margin:0 auto;padding:28px 24px;}
+
+/* Score cards */
+.score-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+.scard{background:rgba(15,23,42,0.85);border:1px solid rgba(255,255,255,0.07);border-radius:14px;
+  padding:20px 16px;text-align:center;}
+.scard .sl{font-size:0.66rem;text-transform:uppercase;letter-spacing:.1em;color:#64748b;margin-bottom:8px;}
+.scard .sv{font-size:2rem;font-weight:800;line-height:1;}
+.scard .ss{font-size:0.72rem;color:#64748b;margin-top:5px;}
+.red .sv{color:#f87171;} .green .sv{color:#4ade80;} .yellow .sv{color:#fbbf24;} .blue .sv{color:#818cf8;}
+
+/* Player */
+.player-wrap{background:rgba(10,18,35,0.9);border:1px solid rgba(99,102,241,0.25);
+  border-radius:16px;overflow:hidden;margin-bottom:24px;}
+.player-header{padding:14px 20px;background:rgba(99,102,241,0.08);
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+.player-header h3{font-size:0.9rem;font-weight:700;color:#a5b4fc;}
+.player-header .ph-meta{font-size:0.75rem;color:#64748b;font-family:'JetBrains Mono',monospace;}
+
+.frames-row{display:grid;grid-template-columns:1fr 3px 1fr;gap:0;min-height:280px;}
+.frame-panel{position:relative;background:#000;overflow:hidden;}
+.frame-panel canvas{width:100%;display:block;}
+.frame-label{position:absolute;top:0;left:0;right:0;padding:7px 12px;
+  font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;z-index:2;}
+.label-corr{background:rgba(239,68,68,0.85);color:#fff;}
+.label-rest{background:rgba(16,185,129,0.85);color:#fff;}
+.frame-divider{background:rgba(99,102,241,0.4);}
+.frame-panel{position:relative;background:#000;}
+.frame-panel canvas{width:100%;display:block;}
+.frame-label{position:absolute;top:0;left:0;right:0;padding:7px 12px;
+  font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;z-index:2;}
+.label-corr{background:rgba(239,68,68,0.82);color:#fff;}
+.label-rest{background:rgba(16,185,129,0.82);color:#fff;}
+.frame-divider{width:3px;background:rgba(99,102,241,0.3);}
+
+/* Controls */
+.controls{padding:14px 20px;background:rgba(5,10,20,0.8);display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.btn{cursor:pointer;border:none;border-radius:8px;padding:8px 18px;font-size:0.82rem;font-weight:700;
+  transition:all 0.2s;font-family:'Inter',sans-serif;}
+.btn-play{background:rgba(99,102,241,0.8);color:#fff;}
+.btn-play:hover{background:#6366f1;}
+.btn-stop{background:rgba(100,116,139,0.3);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);}
+.btn-stop:hover{background:rgba(100,116,139,0.5);}
+.slider-wrap{flex:1;min-width:200px;display:flex;align-items:center;gap:10px;}
+.slider-wrap label{font-size:0.72rem;color:#64748b;white-space:nowrap;}
+input[type=range]{flex:1;accent-color:#6366f1;cursor:pointer;}
+.frame-info{font-size:0.78rem;color:#64748b;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+.fps-sel{background:rgba(15,23,42,0.9);border:1px solid rgba(255,255,255,0.1);
+  color:#94a3b8;border-radius:6px;padding:5px 10px;font-size:0.78rem;cursor:pointer;}
+
+/* Loading */
+#loadingScreen{position:fixed;inset:0;background:#060d1a;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;z-index:200;}
+.spinner{width:48px;height:48px;border:3px solid rgba(99,102,241,0.2);
+  border-top-color:#6366f1;border-radius:50%;animation:spin .7s linear infinite;margin-bottom:24px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#loadingScreen p{color:#64748b;font-size:0.9rem;text-align:center;line-height:1.8;}
+#loadingScreen code{background:rgba(255,255,255,0.06);padding:3px 8px;border-radius:5px;}
+#progressBar{width:320px;height:4px;background:rgba(99,102,241,0.2);border-radius:2px;margin-top:20px;overflow:hidden;}
+#progressFill{height:100%;background:#6366f1;border-radius:2px;width:0%;transition:width 0.3s;}
+#progressTxt{font-size:0.75rem;color:#64748b;margin-top:8px;font-family:'JetBrains Mono',monospace;}
+
+/* Downloads */
+.dl-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
+.dl-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;
+  border-radius:10px;font-size:0.82rem;font-weight:700;text-decoration:none;
+  border:1px solid;transition:all 0.2s;}
+.dl-btn:hover{transform:translateY(-2px);}
+.dl-r{color:#fca5a5;border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.1);}
+.dl-g{color:#86efac;border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.1);}
+.dl-b{color:#a5b4fc;border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);}
+.dl-btn:hover{filter:brightness(1.2);}
+
+.sec-title{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:#6366f1;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.sec-title::after{content:'';flex:1;height:1px;background:rgba(99,102,241,.2);}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <p id="loadingMsg">Kareler yükleniyor...<br><small>300 kare × 2 video</small></p>
+  <div id="progressBar"><div id="progressFill"></div></div>
+  <div id="progressTxt">0 / 600</div>
+</div>
+
+<header>
+  <h1>🎬 Video Kalite Karşılaştırması — QoS VSR</h1>
+  <nav class="nav">
+    <a href="/">📊 Dashboard</a>
+    <a href="/comparison.html" class="active">🎬 Karşılaştırma</a>
+    <a href="/pipeline.html">🔬 Pipeline Kanıtı</a>
+  </nav>
+</header>
+
+<div class="container">
+  <!-- Score Cards -->
+  <div class="score-row">
+    <div class="scard red">
+      <div class="sl">🔴 Bozuk PSNR</div>
+      <div class="sv" id="sc1">—</div>
+      <div class="ss">dB (başlangıç)</div>
+    </div>
+    <div class="scard green">
+      <div class="sl">✅ VSR Sonrası PSNR</div>
+      <div class="sv" id="sc2">—</div>
+      <div class="ss">dB (yapay zeka)</div>
+    </div>
+    <div class="scard yellow">
+      <div class="sl">⬆ Kazanım</div>
+      <div class="sv" id="sc3">—</div>
+      <div class="ss">dB artış</div>
+    </div>
+    <div class="scard blue">
+      <div class="sl">🔷 SSIM Skoru</div>
+      <div class="sv" id="sc4">—</div>
+      <div class="ss">0-1 arası</div>
+    </div>
+  </div>
+
+  <!-- Frame Player -->
+  <div class="sec-title">Yan Yana Karşılaştırma Oynatıcı</div>
+  <div class="player-wrap">
+    <div class="player-header">
+      <h3>◀ Sol: Bozuk (%25 Paket Kaybı) &nbsp;|&nbsp; Sağ: VSR Onarılmış ▶</h3>
+      <span class="ph-meta" id="phMeta">—</span>
+    </div>
+
+    <div class="frames-row">
+      <div class="frame-panel" id="corrPanel">
+        <div class="frame-label label-corr">🔴 Bozuk — Paket Kayıplı</div>
+        <canvas id="corrCanvas"></canvas>
+      </div>
+      <div class="frame-divider"></div>
+      <div class="frame-panel" id="restPanel">
+        <div class="frame-label label-rest">✅ VSR Yapay Zeka Onarımı</div>
+        <canvas id="restCanvas"></canvas>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-play" id="btnPlay" onclick="togglePlay()">▶ Oynat</button>
+      <button class="btn btn-stop" onclick="goFrame(0)">⏮ Başa Sar</button>
+      <div class="slider-wrap">
+        <label>Kare:</label>
+        <input type="range" id="scrubber" min="0" value="0" oninput="scrub(this.value)">
+        <span class="frame-info" id="frameInfo">0 / 0</span>
+      </div>
+      <select class="fps-sel" id="fpsSel" onchange="setFps(this.value)">
+        <option value="5">5 fps (yavaş)</option>
+        <option value="10">10 fps</option>
+        <option value="15" selected>15 fps (normal)</option>
+        <option value="25">25 fps (hızlı)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Downloads -->
+  <div class="sec-title">Dosyaları İndir (VLC ile açabilirsin)</div>
+  <div class="dl-row">
+    <a href="/videos/A_corrupted.mp4" download class="dl-btn dl-r">⬇ Bozuk Video (mp4)</a>
+    <a href="/videos/B_restored.mp4"  download class="dl-btn dl-g">⬇ VSR Onarılmış (mp4)</a>
+    <a href="/videos/C_comparison.mp4" download class="dl-btn dl-b">⬇ Yan Yana Karşılaştırma (mp4)</a>
+  </div>
+</div>
+
+<script>
+// ── Frame Player ───────────────────────────────────────────────────────────
+let corrFrames = [];
+let restFrames = [];
+let totalFrames = 0;
+let currentFrame = 0;
+let playing = false;
+let intervalId = null;
+let playFps = 15;
+let loaded = 0;
+
+const corrCanvas = document.getElementById('corrCanvas');
+const restCanvas = document.getElementById('restCanvas');
+const corrCtx = corrCanvas.getContext('2d');
+const restCtx = restCanvas.getContext('2d');
+
+function pad(n) { return String(n).padStart(4,'0'); }
+
+async function loadAll() {
+  // 1. Meta
+  let meta;
+  try {
+    const r = await fetch('/frames/meta.json');
+    meta = await r.json();
+  } catch(e) {
+    document.getElementById('loadingMsg').innerHTML =
+      'Kareler bulunamadı.<br>Önce şunu çalıştır:<br><code>python make_web_frames.py</code>';
+    return;
+  }
+  totalFrames = meta.n_frames;
+  document.getElementById('scrubber').max = totalFrames - 1;
+
+  // 2. Her kareyi yükle
+  const total = totalFrames * 2;
+  for (let i = 0; i < totalFrames; i++) {
+    const ci = loadImg(`/frames/corr/${pad(i)}.jpg`);
+    const ri = loadImg(`/frames/rest/${pad(i)}.jpg`);
+    const [cimg, rimg] = await Promise.all([ci, ri]);
+    corrFrames.push(cimg);
+    restFrames.push(rimg);
+    loaded += 2;
+
+    // Canvas boyutunu ilk kareden al
+    if (i === 0) {
+      corrCanvas.width  = cimg.width;
+      corrCanvas.height = cimg.height;
+      restCanvas.width  = rimg.width;
+      restCanvas.height = rimg.height;
+      drawFrame(0);
+    }
+
+    // İlerleme
+    const pct = Math.round(loaded / total * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressTxt').textContent = `${loaded} / ${total} kare`;
+    document.getElementById('loadingMsg').innerHTML =
+      `Kareler yükleniyor... %${pct}<br><small>${loaded} / ${total}</small>`;
+  }
+
+  // Hazır
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('phMeta').textContent =
+    `${totalFrames} kare | ${meta.fps} fps | 640×360`;
+  document.getElementById('frameInfo').textContent = `0 / ${totalFrames-1}`;
+
+  // Metrics
+  loadMetrics();
+}
+
+function loadImg(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => res(img);
+    img.onerror = () => res(null);  // hata durumunda null (atla)
+    img.src = url;
+  });
+}
+
+function drawFrame(n) {
+  const c = corrFrames[n];
+  const r = restFrames[n];
+  if (c) corrCtx.drawImage(c, 0, 0);
+  if (r) restCtx.drawImage(r, 0, 0);
+  document.getElementById('scrubber').value = n;
+  document.getElementById('frameInfo').textContent = `${n} / ${totalFrames-1}`;
+}
+
+function goFrame(n) {
+  currentFrame = Math.max(0, Math.min(n, totalFrames-1));
+  drawFrame(currentFrame);
+}
+
+function scrub(v) {
+  if (playing) pausePlay();
+  goFrame(parseInt(v));
+}
+
+function togglePlay() {
+  playing ? pausePlay() : startPlay();
+}
+
+function startPlay() {
+  playing = true;
+  document.getElementById('btnPlay').textContent = '⏸ Durdur';
+  intervalId = setInterval(() => {
+    currentFrame = (currentFrame + 1) % totalFrames;
+    drawFrame(currentFrame);
+  }, 1000 / playFps);
+}
+
+function pausePlay() {
+  playing = false;
+  document.getElementById('btnPlay').textContent = '▶ Oynat';
+  clearInterval(intervalId);
+}
+
+function setFps(v) {
+  playFps = parseInt(v);
+  if (playing) { pausePlay(); startPlay(); }
+}
+
+async function loadMetrics() {
+  try {
+    const r = await fetch('/api/comparison');
+    if (!r.ok) return;
+    const d = await r.json();
+    const wr = d[d.winner];
+    document.getElementById('sc1').textContent = wr.base_psnr.toFixed(1);
+    document.getElementById('sc2').textContent = wr.psnr.toFixed(1);
+    document.getElementById('sc3').textContent = '+' + wr.psnr_gain.toFixed(2);
+    document.getElementById('sc4').textContent = wr.ssim.toFixed(4);
+  } catch(e) {}
+}
+
+loadAll();
+</script>
+</body>
+</html>

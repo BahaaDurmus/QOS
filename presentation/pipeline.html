@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>4 Aşamalı Pipeline Kanıtı — QoS VSR</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#060d1a;color:#e2e8f0;font-family:'Inter',sans-serif;min-height:100vh;}
+header{background:rgba(15,23,42,0.95);border-bottom:1px solid rgba(99,102,241,0.3);
+  padding:16px 32px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;}
+header h1{font-size:1.1rem;font-weight:800;background:linear-gradient(90deg,#818cf8,#34d399);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.nav a{text-decoration:none;font-size:0.8rem;font-weight:600;padding:7px 16px;border-radius:8px;
+  border:1px solid rgba(255,255,255,0.08);color:#94a3b8;margin-left:8px;transition:all 0.2s;}
+.nav a:hover,.nav a.active{color:#e0e7ff;background:rgba(99,102,241,0.15);border-color:rgba(99,102,241,0.4);}
+
+.container{max-width:1300px;margin:0 auto;padding:32px 24px;}
+
+/* Flow arrows */
+.pipeline-flow{display:flex;align-items:stretch;gap:0;margin-bottom:36px;overflow-x:auto;}
+.stage{flex:1;min-width:260px;}
+.stage-inner{height:100%;background:rgba(15,23,42,0.85);border:1px solid var(--clr);
+  border-radius:16px;padding:22px;position:relative;overflow:hidden;}
+.stage-inner::before{content:'';position:absolute;inset:0;background:var(--glow);opacity:0.05;border-radius:16px;}
+.stage-arrow{display:flex;align-items:center;padding:0 8px;color:#334155;font-size:1.8rem;flex-shrink:0;}
+
+/* Stage colors */
+.s1{--clr:rgba(59,130,246,0.5);--glow:linear-gradient(135deg,#3b82f6,#2563eb);}
+.s2{--clr:rgba(239,68,68,0.5); --glow:linear-gradient(135deg,#ef4444,#dc2626);}
+.s3{--clr:rgba(245,158,11,0.5);--glow:linear-gradient(135deg,#f59e0b,#d97706);}
+.s4{--clr:rgba(16,185,129,0.5);--glow:linear-gradient(135deg,#10b981,#059669);}
+
+.stage-num{font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;}
+.s1 .stage-num{color:#60a5fa;} .s2 .stage-num{color:#f87171;}
+.s3 .stage-num{color:#fbbf24;} .s4 .stage-num{color:#34d399;}
+.stage-title{font-size:1rem;font-weight:700;margin-bottom:4px;}
+.stage-sub{font-size:0.75rem;color:#64748b;margin-bottom:16px;}
+
+/* Live counters */
+.counter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.counter{background:rgba(0,0,0,0.3);border-radius:10px;padding:10px 12px;text-align:center;}
+.counter .cv{font-size:1.5rem;font-weight:800;line-height:1;font-family:'JetBrains Mono',monospace;}
+.counter .cl{font-size:0.62rem;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-top:4px;}
+.s1 .counter .cv{color:#93c5fd;} .s2 .counter .cv{color:#fca5a5;}
+.s3 .counter .cv{color:#fcd34d;} .s4 .counter .cv{color:#6ee7b7;}
+
+/* Status badge */
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;animation:pulse 1.5s ease-in-out infinite;}
+.dot-on{background:#4ade80;box-shadow:0 0 8px #4ade80;}
+.dot-off{background:#f87171;box-shadow:0 0 8px #f87171;animation:none;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* Model proof box */
+.proof-box{background:rgba(15,23,42,0.9);border:1px solid rgba(16,185,129,0.35);
+  border-radius:16px;padding:24px;margin-bottom:28px;}
+.proof-box h2{font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;
+  color:#34d399;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.proof-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+.proof-item{background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.06);
+  border-radius:10px;padding:14px;}
+.proof-item .pi-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:6px;}
+.proof-item .pi-val{font-size:0.9rem;font-weight:700;color:#e2e8f0;font-family:'JetBrains Mono',monospace;word-break:break-all;}
+.proof-item .pi-val.green{color:#4ade80;} .proof-item .pi-val.blue{color:#60a5fa;}
+.proof-item .pi-val.yellow{color:#fbbf24;} .proof-item .pi-val.red{color:#f87171;}
+
+/* Log terminal */
+.terminal{background:#020409;border:1px solid rgba(255,255,255,0.07);border-radius:12px;
+  padding:18px;font-family:'JetBrains Mono',monospace;font-size:0.75rem;line-height:1.7;
+  max-height:220px;overflow-y:auto;margin-bottom:28px;}
+.terminal .t-time{color:#4b5563;} .terminal .t-stage{font-weight:600;}
+.terminal .t-s1{color:#60a5fa;} .terminal .t-s2{color:#f87171;}
+.terminal .t-s3{color:#fbbf24;} .terminal .t-s4{color:#34d399;}
+.terminal .t-msg{color:#94a3b8;}
+
+/* Video section */
+.vid-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;}
+.vid-box{background:rgba(10,18,35,0.9);border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;}
+.vid-box-hdr{padding:10px 16px;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;}
+.vid-box-hdr.raw{background:rgba(239,68,68,0.1);color:#f87171;}
+.vid-box-hdr.vsr{background:rgba(16,185,129,0.1);color:#34d399;}
+.vid-box img{width:100%;display:block;min-height:140px;object-fit:cover;background:#000;}
+
+/* Timestamp */
+.ts-bar{text-align:right;font-size:0.72rem;color:#334155;margin-bottom:10px;font-family:'JetBrains Mono',monospace;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔬 4 Aşamalı Pipeline — Canlı Kanıt</h1>
+  <nav class="nav">
+    <a href="/">📊 Dashboard</a>
+    <a href="/comparison.html">🎬 Video Karşılaştırma</a>
+    <a href="/pipeline.html" class="active">🔬 Pipeline Kanıtı</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="ts-bar">Son güncelleme: <span id="lastUpdate">—</span></div>
+
+  <!-- 4 Stage Flow -->
+  <div class="pipeline-flow">
+    <!-- Stage 1: Server -->
+    <div class="stage">
+      <div class="stage-inner s1">
+        <div class="stage-num">⬤ Aşama 1 — Streaming</div>
+        <div class="stage-title">UDP Video Sunucusu</div>
+        <div class="stage-sub">input.mp4 → UDP paketleri → Port 9998</div>
+        <div class="counter-grid">
+          <div class="counter"><div class="cv" id="s1-sent">—</div><div class="cl">Gönderilen Paket</div></div>
+          <div class="counter"><div class="cv" id="s1-fps">—</div><div class="cl">Kaynak FPS</div></div>
+          <div class="counter"><div class="cv" id="s1-bw">—</div><div class="cl">Bant (kbps)</div></div>
+          <div class="counter"><div class="cv" id="s1-status">—</div><div class="cl">Durum</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="stage-arrow">➜</div>
+
+    <!-- Stage 2: WMN -->
+    <div class="stage">
+      <div class="stage-inner s2">
+        <div class="stage-num">⬤ Aşama 2 — WMN Simülatörü</div>
+        <div class="stage-title">Kablosuz Ağ Bozucu</div>
+        <div class="stage-sub">Port 9998 → Paket kaybı + gecikme → Port 9999</div>
+        <div class="counter-grid">
+          <div class="counter"><div class="cv" id="s2-dropped">—</div><div class="cl">Düşürülen Paket</div></div>
+          <div class="counter"><div class="cv" id="s2-loss">—</div><div class="cl">Kayıp Oranı %</div></div>
+          <div class="counter"><div class="cv" id="s2-delay">—</div><div class="cl">Gecikme (ms)</div></div>
+          <div class="counter"><div class="cv" id="s2-jitter">—</div><div class="cl">Jitter (ms)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="stage-arrow">➜</div>
+
+    <!-- Stage 3: QoS -->
+    <div class="stage">
+      <div class="stage-inner s3">
+        <div class="stage-num">⬤ Aşama 3 — QoS Monitör</div>
+        <div class="stage-title">Kalite İzleyici + ABR</div>
+        <div class="stage-sub">Ağ metriklerini analiz → Kalite kademesi → VSR kararı</div>
+        <div class="counter-grid">
+          <div class="counter"><div class="cv" id="s3-quality">—</div><div class="cl">Kalite Kademesi</div></div>
+          <div class="counter"><div class="cv" id="s3-vsr">—</div><div class="cl">VSR Kararı</div></div>
+          <div class="counter"><div class="cv" id="s3-loss">—</div><div class="cl">Anlık Kayıp %</div></div>
+          <div class="counter"><div class="cv" id="s3-delay">—</div><div class="cl">Gecikme (ms)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="stage-arrow">➜</div>
+
+    <!-- Stage 4: VSR -->
+    <div class="stage">
+      <div class="stage-inner s4">
+        <div class="stage-num">⬤ Aşama 4 — VSR Modeli</div>
+        <div class="stage-title">Yapay Zeka Onarım</div>
+        <div class="stage-sub">15 kare pencere → VSR CNN → Onarılmış kare</div>
+        <div class="counter-grid">
+          <div class="counter"><div class="cv" id="s4-restored">—</div><div class="cl">Onarılan Kare</div></div>
+          <div class="counter"><div class="cv" id="s4-total">—</div><div class="cl">Toplam Kare</div></div>
+          <div class="counter"><div class="cv" id="s4-fps">—</div><div class="cl">İstemci FPS</div></div>
+          <div class="counter"><div class="cv" id="s4-corrupt">—</div><div class="cl">Bozuk Kare</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model Proof -->
+  <div class="proof-box">
+    <h2>🔐 Model Kullanım Kanıtı</h2>
+    <div class="proof-row">
+      <div class="proof-item">
+        <div class="pi-label">Yüklenen Model Dosyası</div>
+        <div class="pi-val green" id="pf-model">—</div>
+      </div>
+      <div class="proof-item">
+        <div class="pi-label">Model Aktif mi?</div>
+        <div class="pi-val" id="pf-active">—</div>
+      </div>
+      <div class="proof-item">
+        <div class="pi-label">Pencere Boyutu</div>
+        <div class="pi-val blue" id="pf-window">—</div>
+      </div>
+      <div class="proof-item">
+        <div class="pi-label">Ağ Profili</div>
+        <div class="pi-val yellow" id="pf-profile">medium</div>
+      </div>
+      <div class="proof-item">
+        <div class="pi-label">Protokol</div>
+        <div class="pi-val blue">UDP / SOCK_DGRAM</div>
+      </div>
+      <div class="proof-item">
+        <div class="pi-label">Model Mimarisi</div>
+        <div class="pi-val blue">ResidualCNN · 8 blok · 64 filtre</div>
+      </div>
+      <div class="proof-item">
+        <div class="pi-label">Bozuk Kare Oranı (İstemci)</div>
+        <div class="pi-val red" id="pf-closs">—</div>
+      </div>
+      <div class="proof-item">
+        <div class="pi-label">WMN Düşürülen Paket</div>
+        <div class="pi-val red" id="pf-wdrop">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Canlı Video -->
+  <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6366f1;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+    Aşama 2→4 Canlı Görüntü
+    <span style="flex:1;height:1px;background:rgba(99,102,241,0.2);display:block;"></span>
+  </div>
+  <div class="vid-row">
+    <div class="vid-box">
+      <div class="vid-box-hdr raw">🔴 Bozuk — WMN Çıkışı (Aşama 2)</div>
+      <img id="rawImg" src="/api/frame/raw" alt="Bozuk akış">
+    </div>
+    <div class="vid-box">
+      <div class="vid-box-hdr vsr">✅ Onarılmış — VSR Çıkışı (Aşama 4)</div>
+      <img id="vsrImg" src="/api/frame/restored" alt="VSR onarım">
+    </div>
+  </div>
+
+  <!-- Log Terminal -->
+  <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6366f1;margin-bottom:12px;">Canlı Sistem Logu</div>
+  <div class="terminal" id="logBox">
+    <span class="t-stage t-s4">[ SİSTEM ]</span> <span class="t-msg">Pipeline başlatılıyor, veriler bekleniyor...</span>
+  </div>
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+let logLines = [];
+
+function addLog(stage, cls, msg) {
+  const t = new Date().toLocaleTimeString('tr-TR');
+  logLines.push(`<span class="t-time">[${t}]</span> <span class="t-stage ${cls}">[${stage}]</span> <span class="t-msg">${msg}</span>`);
+  if (logLines.length > 60) logLines.shift();
+  const box = el('logBox');
+  box.innerHTML = logLines.join('<br>');
+  box.scrollTop = box.scrollHeight;
+}
+
+function fmt(v, dec=0) { return v == null ? '—' : Number(v).toFixed(dec); }
+
+async function update() {
+  try {
+    const res = await fetch('/api/pipeline');
+    if (!res.ok) return;
+    const d = await res.json();
+    const w = d.wmn   || {};
+    const c = d.client || {};
+
+    el('lastUpdate').textContent = new Date().toLocaleTimeString('tr-TR');
+
+    // Stage 1 — Sunucu
+    const sent = w.packets_sent || 0;
+    el('s1-sent').textContent = sent.toLocaleString();
+    el('s1-fps').textContent  = fmt(w.source_fps || 25);
+    el('s1-bw').textContent   = fmt(w.bandwidth_kbps);
+    const s1on = sent > 0;
+    el('s1-status').innerHTML = `<span class="status-dot ${s1on?'dot-on':'dot-off'}"></span>${s1on?'AKTİF':'BEKLE'}`;
+
+    // Stage 2 — WMN
+    const dropped = w.packets_dropped || 0;
+    const loss    = w.current_loss_rate || 0;
+    el('s2-dropped').textContent = dropped.toLocaleString();
+    el('s2-loss').textContent    = fmt(loss, 1);
+    el('s2-delay').textContent   = fmt(w.avg_delay_ms, 1);
+    el('s2-jitter').textContent  = fmt(w.jitter_ms, 1);
+    el('pf-wdrop').textContent   = dropped.toLocaleString() + ' paket';
+
+    // Stage 3 — QoS
+    const ql = w.quality_level || '—';
+    el('s3-quality').textContent = ql;
+    el('s3-vsr').textContent     = (ql==='LOW'||ql==='CRITICAL') ? 'AKTİF ✅' : 'BEKLEME';
+    el('s3-loss').textContent    = fmt(loss, 1);
+    el('s3-delay').textContent   = fmt(w.avg_delay_ms, 1);
+    el('pf-profile').textContent = w.profile || 'medium';
+
+    // Stage 4 — VSR Client
+    el('s4-restored').textContent = (c.restored_frames||0).toLocaleString();
+    el('s4-total').textContent    = (c.total_frames||0).toLocaleString();
+    el('s4-fps').textContent      = fmt(c.fps, 1);
+    el('s4-corrupt').textContent  = (c.corrupted_frames||0).toLocaleString();
+
+    // Proof panel
+    el('pf-model').textContent  = c.model_name || '—';
+    const active = c.model_active === true;
+    el('pf-active').innerHTML   = active
+      ? '<span style="color:#4ade80">✅ EVET — model çalışıyor</span>'
+      : '<span style="color:#f87171">❌ HAYIR (fallback)</span>';
+    el('pf-window').textContent = c.window_size ? `${c.window_size} kare` : '—';
+    el('pf-closs').textContent  = fmt(c.loss_rate_pct, 1) + '%';
+
+    // Log entries
+    if (sent > 0)    addLog('SUNUCU', 't-s1', `${sent} paket gönderildi | BW: ${fmt(w.bandwidth_kbps)} kbps`);
+    if (dropped > 0) addLog('WMN', 't-s2', `${dropped} paket düşürüldü | Kayıp: %${fmt(loss,1)} | Gecikme: ${fmt(w.avg_delay_ms,0)}ms`);
+    addLog('QoS', 't-s3', `Kalite: ${ql} | VSR: ${(ql==='LOW'||ql==='CRITICAL')?'AKTİF':'PASIF'}`);
+    if (c.total_frames > 0) addLog('VSR', 't-s4', `Model: ${c.model_name} | Onarılan: ${c.restored_frames} kare | FPS: ${fmt(c.fps,1)}`);
+
+  } catch(e) { /* sunucu hazır değil */ }
+}
+
+// Frame yenileme
+function refreshFrame(id, url) {
+  const img = el(id);
+  if (!img) return;
+  const p = new Image();
+  p.onload = () => { img.src = p.src; };
+  p.src = url + '?t=' + Date.now();
+}
+
+setInterval(update, 1500);
+setInterval(() => refreshFrame('rawImg', '/api/frame/raw'), 400);
+setInterval(() => refreshFrame('vsrImg', '/api/frame/restored'), 1800);
+update();
+</script>
+</body>
+</html>

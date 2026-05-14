@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QoS-Based Video Streaming Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+        }
+        .metric-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+        .quality-HIGH { color: #4ade80; text-shadow: 0 0 10px rgba(74, 222, 128, 0.5); }
+        .quality-MEDIUM { color: #facc15; text-shadow: 0 0 10px rgba(250, 204, 21, 0.5); }
+        .quality-LOW { color: #f97316; text-shadow: 0 0 10px rgba(249, 115, 22, 0.5); }
+        .quality-CRITICAL { color: #ef4444; text-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+    </style>
+</head>
+<body class="min-h-screen p-6 flex flex-col gap-6">
+
+    <!-- Header -->
+    <header class="glass-panel p-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                Kablosuz Örgüsel Ağlarda QoS Tabanlı Video Akışı Optimizasyonu
+            </h1>
+            <p class="text-slate-400 mt-2 text-lg">Gerçek Zamanlı WMN Simülasyonu ve VSR Restorasyon Paneli</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <a href="/comparison.html" target="_blank"
+               class="px-4 py-2 rounded-xl border border-emerald-500 text-emerald-400 text-sm font-semibold hover:bg-emerald-500 hover:text-white transition-all">
+                🎬 Video Karşılaştırma →
+            </a>
+            <div class="text-right">
+                <div class="text-sm text-slate-400 uppercase tracking-wider font-semibold">Mevcut Ağ Profili</div>
+                <div id="networkProfile" class="text-2xl font-bold text-blue-400">-</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left Column: Metrics -->
+        <div class="lg:col-span-1 flex flex-col gap-6">
+            
+            <!-- Quality Status -->
+            <div class="glass-panel p-6 metric-card flex flex-col items-center justify-center text-center">
+                <div class="text-sm text-slate-400 uppercase tracking-wider mb-2">Video Kalite Kademesi (ABR)</div>
+                <div id="qualityLevel" class="text-5xl font-black mb-2">-</div>
+                <div id="vsrStatus" class="mt-4 px-4 py-1 rounded-full bg-slate-800 text-sm font-semibold border border-slate-600 hidden">
+                    ✨ VSR YAPAY ZEKA ONARIMI AKTİF
+                </div>
+            </div>
+
+            <!-- KPIs -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="glass-panel p-4 metric-card">
+                    <div class="text-xs text-slate-400 uppercase mb-1">Paket Kaybı</div>
+                    <div class="text-3xl font-bold"><span id="packetLoss">0</span><span class="text-lg text-slate-500">%</span></div>
+                </div>
+                <div class="glass-panel p-4 metric-card">
+                    <div class="text-xs text-slate-400 uppercase mb-1">Gecikme (Delay)</div>
+                    <div class="text-3xl font-bold"><span id="delay">0</span><span class="text-lg text-slate-500">ms</span></div>
+                </div>
+                <div class="glass-panel p-4 metric-card">
+                    <div class="text-xs text-slate-400 uppercase mb-1">Bant Genişliği</div>
+                    <div class="text-3xl font-bold"><span id="bandwidth">0</span><span class="text-lg text-slate-500">kbps</span></div>
+                </div>
+                <div class="glass-panel p-4 metric-card">
+                    <div class="text-xs text-slate-400 uppercase mb-1">Gönderilen Paket</div>
+                    <div class="text-3xl font-bold"><span id="packetsReceived">0</span></div>
+                </div>
+            </div>
+            
+            <!-- Process Info -->
+            <div class="glass-panel p-6 flex-1">
+                <h3 class="text-xl font-semibold mb-4 text-emerald-400">Sistem Akışı</h3>
+                <ol class="relative border-l border-slate-700 ml-3 space-y-6">                  
+                    <li class="pl-6">
+                        <span class="absolute flex items-center justify-center w-6 h-6 bg-blue-900 rounded-full -left-3 ring-4 ring-slate-900">
+                            1
+                        </span>
+                        <h4 class="font-semibold text-slate-200">Video Sunucusu (UDP)</h4>
+                        <p class="text-sm text-slate-400">Kareler sıkıştırılır ve ağa verilir.</p>
+                    </li>
+                    <li class="pl-6">
+                        <span class="absolute flex items-center justify-center w-6 h-6 bg-purple-900 rounded-full -left-3 ring-4 ring-slate-900">
+                            2
+                        </span>
+                        <h4 class="font-semibold text-slate-200">WMN Simülatörü</h4>
+                        <p class="text-sm text-slate-400">Ağ bozulumları (paket kaybı, gecikme) uygulanır.</p>
+                    </li>
+                    <li class="pl-6">
+                        <span class="absolute flex items-center justify-center w-6 h-6 bg-emerald-900 rounded-full -left-3 ring-4 ring-slate-900">
+                            3
+                        </span>
+                        <h4 class="font-semibold text-slate-200">QoS Monitör & İstemci</h4>
+                        <p class="text-sm text-slate-400">Ağ durumu analiz edilir, adaptif kalite seçilir.</p>
+                    </li>
+                    <li class="pl-6">
+                        <span class="absolute flex items-center justify-center w-6 h-6 bg-rose-900 rounded-full -left-3 ring-4 ring-slate-900">
+                            4
+                        </span>
+                        <h4 class="font-semibold text-slate-200">Yapay Zeka (VSR)</h4>
+                        <p class="text-sm text-slate-400">Ağ kötüleştiğinde eksik pikseller anlık onarılır.</p>
+                    </li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Right Column: Video + Charts -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+            <!-- Canli Video -->
+            <div class="glass-panel p-4">
+                <h3 class="text-lg font-semibold mb-3">&#127916; Canli Video Akisi</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <div class="text-xs text-blue-400 font-bold uppercase tracking-wider mb-1">Ham Akis (Bozuk)</div>
+                        <img id="rawFrame" src="/api/frame/raw" class="w-full rounded-lg border border-slate-700 bg-slate-900" style="min-height:160px;object-fit:cover;" alt="Ham">
+                    </div>
+                    <div>
+                        <div class="text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1">VSR Yapay Zeka Onarimi</div>
+                        <img id="restoredFrame" src="/api/frame/restored" class="w-full rounded-lg border border-emerald-800 bg-slate-900" style="min-height:160px;object-fit:cover;" alt="VSR">
+                    </div>
+                </div>
+            </div>
+            <div class="glass-panel p-6 flex-1">
+                <h3 class="text-lg font-semibold mb-4">Paket Kayip Orani (%)</h3>
+                <div class="relative h-48 w-full">
+                    <canvas id="lossChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="glass-panel p-6 flex-1">
+                <h3 class="text-lg font-semibold mb-4">Ağ Gecikmesi (ms)</h3>
+                <div class="relative h-48 w-full">
+                    <canvas id="delayChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="glass-panel p-6 flex-1">
+                <h3 class="text-lg font-semibold mb-4">Bant Genişliği (kbps)</h3>
+                <div class="relative h-48 w-full">
+                    <canvas id="bwChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Chart Configs
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            scales: {
+                x: { display: false },
+                y: { 
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: 'rgba(255,255,255,0.5)' }
+                }
+            },
+            plugins: { legend: { display: false } }
+        };
+
+        const maxDataPoints = 60; // 60 seconds of history
+
+        // Initialize Charts
+        const lossCtx = document.getElementById('lossChart').getContext('2d');
+        const lossChart = new Chart(lossCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ 
+                data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', 
+                borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0
+            }]},
+            options: { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, max: 100 } } }
+        });
+
+        const delayCtx = document.getElementById('delayChart').getContext('2d');
+        const delayChart = new Chart(delayCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ 
+                data: [], borderColor: '#facc15', backgroundColor: 'rgba(250,204,21,0.1)', 
+                borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0
+            }]},
+            options: commonOptions
+        });
+
+        const bwCtx = document.getElementById('bwChart').getContext('2d');
+        const bwChart = new Chart(bwCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ 
+                data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', 
+                borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0
+            }]},
+            options: commonOptions
+        });
+
+        // Determine Quality Level based on stats
+        function decideQuality(loss, delay, bw) {
+            if (loss < 2.0 && delay < 30.0 && (bw == 0 || bw > 5000)) return "HIGH";
+            if (loss < 8.0 && delay < 80.0 && (bw == 0 || bw > 1500)) return "MEDIUM";
+            if (loss < 20.0 && delay < 200.0 && (bw == 0 || bw > 400)) return "LOW";
+            return "CRITICAL";
+        }
+
+        // Fetch Metrics
+        async function fetchMetrics() {
+            try {
+                const response = await fetch('/api/metrics');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.log("Waiting for metrics...");
+                    return;
+                }
+
+                // Update UI elements
+                document.getElementById('packetLoss').innerText = data.current_loss_rate.toFixed(1);
+                document.getElementById('delay').innerText = data.avg_delay_ms.toFixed(0);
+                document.getElementById('bandwidth').innerText = data.bandwidth_kbps.toFixed(0);
+                document.getElementById('packetsReceived').innerText = data.packets_received;
+                
+                const profile = data.profile ? data.profile.toUpperCase() : '-';
+                document.getElementById('networkProfile').innerText = profile;
+
+                // Determine and update quality
+                const quality = decideQuality(data.current_loss_rate, data.avg_delay_ms, data.bandwidth_kbps);
+                const qElem = document.getElementById('qualityLevel');
+                qElem.innerText = quality;
+                qElem.className = `text-5xl font-black mb-2 quality-${quality}`;
+                
+                // Show/hide VSR badge
+                const vsrBadge = document.getElementById('vsrStatus');
+                if (quality === 'LOW' || quality === 'CRITICAL') {
+                    vsrBadge.classList.remove('hidden');
+                    vsrBadge.classList.add('animate-pulse', 'text-emerald-400', 'border-emerald-500');
+                } else {
+                    vsrBadge.classList.add('hidden');
+                }
+
+                // Update charts
+                const timeStr = new Date(data.timestamp * 1000).toLocaleTimeString();
+                
+                updateChart(lossChart, timeStr, data.current_loss_rate);
+                updateChart(delayChart, timeStr, data.avg_delay_ms);
+                updateChart(bwChart, timeStr, data.bandwidth_kbps);
+
+            } catch (error) {
+                console.error("Error fetching metrics:", error);
+            }
+        }
+
+        function updateChart(chart, label, value) {
+            chart.data.labels.push(label);
+            chart.data.datasets[0].data.push(value);
+            
+            if (chart.data.labels.length > maxDataPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            
+            chart.update();
+        }
+
+        // Poll every 1 second
+        setInterval(fetchMetrics, 1000);
+        fetchMetrics();
+
+        // Video frames: preload ile yukle - basarisiz olursa eski goruntu kalir
+        function refreshFrame(imgId, url) {
+            const img = document.getElementById(imgId);
+            if (!img) return;
+            const probe = new Image();
+            probe.onload = function() {
+                img.src = probe.src;  // basarili yuklenirse swap et
+            };
+            // hata olursa (onerror) hic bir sey yapma - eski goruntu kalir
+            probe.src = url + '?t=' + Date.now();
+        }
+
+        function refreshFrames() {
+            refreshFrame('rawFrame',      '/api/frame/raw');
+            refreshFrame('restoredFrame', '/api/frame/restored');
+        }
+
+        // VSR yavas oldugu icin raw daha sik, restored daha seyrek guncellenir
+        setInterval(() => refreshFrame('rawFrame', '/api/frame/raw'), 300);
+        setInterval(() => refreshFrame('restoredFrame', '/api/frame/restored'), 1500);
+    </script>
+</body>
+</html>

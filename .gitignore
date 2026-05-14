@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# QoS-Based Video Streaming Optimization in Wireless Mesh Networks
+# .gitignore
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Model Ağırlıkları (Büyük dosyalar – Git LFS kullanın) ──────────────────
+*.pth
+*.pt
+*.onnx
+*.h5
+*.pkl
+
+# ── Video Dosyaları ────────────────────────────────────────────────────────
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+*.flv
+
+# ── Görüntü Dosyaları (Dataset) ───────────────────────────────────────────
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.webp
+*.tiff
+
+# ── Sıkıştırılmış / Büyük Veri Dosyaları ─────────────────────────────────
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.gz
+*.7z
+
+# ── Çıktı ve Veri Klasörleri ──────────────────────────────────────────────
+dataset/
+dataset_vimeo/
+content/
+output/
+restored/
+frames/
+corrupted/
+logs/
+
+# ── Python Önbelleği ──────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Sanal Ortam ───────────────────────────────────────────────────────────
+.env
+.venv
+venv/
+env/
+ENV/
+
+# ── IDE ve Editor Dosyaları ───────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Jupyter Notebook Geçici Dosyaları ────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── İstatistik ve Log Dosyaları ───────────────────────────────────────────
+*.csv
+*.log
