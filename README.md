@@ -31,7 +31,7 @@ QOS-master/
 │
 └── presentation/               ← Web Dashboard (Sunum Arayüzü)
     ├── index.html              # Ana dashboard — canlı ağ metrikleri
-    ├── pipeline.html           # 4 aşama canlı kanıt sayfası
+    ├── pipeline.html           # 4 aşamalı pipeline izleme sayfası
     ├── comparison.html         # Bozuk vs VSR onarımlı video karşılaştırması
     └── server.py               # HTTP sunucu (localhost:8080)
 ```
@@ -150,7 +150,7 @@ Ne görürsün:
 
 ---
 
-#### 🔬 Sekme 2: 4 Aşama Pipeline Kanıtı
+#### Sekme 2: 4 Aşamalı Pipeline
 **→ `http://localhost:8080/pipeline.html`**
 
 Ne görürsün:
@@ -160,8 +160,7 @@ Ne görürsün:
 - **Aşama 4 (Yeşil kutu):** Model adı ✅ + onarılan kare sayısı + FPS
 - **Alt terminal:** Zaman damgalı canlı sistem logu
 
-> 🔐 Bu sayfa projenin yapay olmadığının kanıtıdır:  
-> Model dosyası adı, inference sayısı, paket sayaçları — hepsi gerçek zamanlı.
+> Model dosyası adı, inference sayısı ve paket sayaçları gerçek zamanlı güncellenir.
 
 ---
 

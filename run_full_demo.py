@@ -13,6 +13,7 @@ Kullanım:
 """
 
 import argparse
+import json
 import subprocess
 import sys
 import time
@@ -31,7 +32,7 @@ def stream_output(proc, prefix: str):
 
 def main():
     ap = argparse.ArgumentParser(description="QoS Projesi - Tam Sistem Demosu")
-    ap.add_argument("--video", required=True, help="Kaynak video (.mp4)")
+    ap.add_argument("--video", default="input.mp4", help="Kaynak video (.mp4)")
     ap.add_argument("--model", default=None, help="VSR modeli (.pth)")
     ap.add_argument("--profile", default="medium", choices=["perfect", "good", "medium", "poor", "critical"])
     ap.add_argument("--display", action="store_true")
@@ -52,6 +53,25 @@ def main():
 
     python = sys.executable
     base_dir = Path(__file__).parent
+
+    # Dashboard / pipeline icin aktif video bilgisi
+    src_file = base_dir / "output" / "video_source.json"
+    src_file.parent.mkdir(exist_ok=True)
+    is_default = video_path.name == "input.mp4"
+    src_file.write_text(
+        json.dumps(
+            {
+                "active": video_path.name,
+                "is_default": is_default,
+                "path": str(video_path),
+                "type": "default" if is_default else "custom",
+                "mode": "streaming",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     
     # Çıktı klasörünü temizle/oluştur
     out_dir = base_dir / "output"
@@ -131,7 +151,7 @@ def main():
 
         print("\n" + "="*60)
         print("[OK] TUM SISTEM CALISIYOR!")
-        print("[*] Sunum Dashboard'u icin tarayicida acin: http://localhost:8080")
+        print("[*] Web paneli: http://localhost:8080")
         print("[!] Kapatmak icin terminalde Ctrl+C'ye basin.")
         print("="*60 + "\n")
 

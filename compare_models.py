@@ -116,7 +116,7 @@ def corrupt(frame, rate=0.20):
 
 # ─── Tek Model Degerlendirme ─────────────────────────────────────────────────
 
-def evaluate(model, device, frames_clean, frames_corr, vsr_w, vsr_h, label):
+def evaluate(model, device, frames_clean, frames_corr, vsr_w, vsr_h, label, progress_cb=None):
     """Tum kareleri isleterek PSNR/SSIM hesaplar. Onarilmis kareleri dondurur."""
     W, H = frames_clean[0].shape[1], frames_clean[0].shape[0]
     WINDOW = 15
@@ -143,6 +143,9 @@ def evaluate(model, device, frames_clean, frames_corr, vsr_w, vsr_h, label):
         if len(window) == WINDOW:
             psnr_vals.append(psnr(clean, res_full))
             ssim_vals.append(ssim_simple(clean, res_full))
+
+        if progress_cb:
+            progress_cb(i + 1, len(frames_clean))
 
         if (i+1) % 30 == 0:
             avg_p = sum(psnr_vals[-30:])/max(1,len(psnr_vals[-30:]))

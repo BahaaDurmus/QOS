@@ -93,6 +93,19 @@ input[type=range]{flex:1;accent-color:#6366f1;cursor:pointer;}
 .sec-title{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
   color:#6366f1;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
 .sec-title::after{content:'';flex:1;height:1px;background:rgba(99,102,241,.2);}
+
+.upload-panel{background:rgba(15,23,42,0.9);border:1px solid rgba(99,102,241,0.25);
+  border-radius:14px;padding:18px 20px;margin-bottom:24px;display:flex;flex-wrap:wrap;
+  align-items:flex-end;gap:14px;}
+.upload-panel label{font-size:0.72rem;color:#94a3b8;display:flex;flex-direction:column;gap:6px;}
+.upload-panel input[type=file]{font-size:0.8rem;color:#cbd5e1;max-width:280px;}
+.upload-panel input[type=range]{width:140px;accent-color:#6366f1;}
+.upload-panel .loss-val{font-family:'JetBrains Mono',monospace;color:#a5b4fc;font-size:0.8rem;}
+.btn-upload{background:#4f46e5;color:#fff;}
+.btn-upload:hover{background:#6366f1;}
+.btn-upload:disabled{opacity:0.5;cursor:not-allowed;}
+.upload-hint{font-size:0.72rem;color:#64748b;flex:1;min-width:200px;}
+#jobStatus{font-size:0.78rem;color:#94a3b8;font-family:'JetBrains Mono',monospace;width:100%;margin-top:4px;}
 </style>
 </head>
 <body>
@@ -100,32 +113,50 @@ input[type=range]{flex:1;accent-color:#6366f1;cursor:pointer;}
 <!-- Loading overlay -->
 <div id="loadingScreen">
   <div class="spinner"></div>
-  <p id="loadingMsg">Kareler yükleniyor...<br><small>300 kare × 2 video</small></p>
+  <p id="loadingMsg">Kareler yükleniyor...<br><small>300 kare × 2 = 600 JPEG (1–3 dk sürebilir)</small></p>
   <div id="progressBar"><div id="progressFill"></div></div>
   <div id="progressTxt">0 / 600</div>
+  <!-- Verbose Terminal Log -->
+  <div id="loadingVerbose" style="margin-top: 20px; width: 85%; max-width: 550px; height: 140px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 8px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #a5b4fc; text-align: left; overflow-y: auto; white-space: pre-wrap; box-shadow: inset 0 0 10px rgba(0,0,0,0.8); line-height: 1.4;"></div>
 </div>
 
 <header>
-  <h1>🎬 Video Kalite Karşılaştırması — QoS VSR</h1>
+  <h1>Video Kalite Karşılaştırması</h1>
   <nav class="nav">
-    <a href="/">📊 Dashboard</a>
-    <a href="/comparison.html" class="active">🎬 Karşılaştırma</a>
-    <a href="/pipeline.html">🔬 Pipeline Kanıtı</a>
+    <a href="/">Dashboard</a>
+    <a href="/comparison.html" class="active">Karşılaştırma</a>
+    <a href="/pipeline.html">Pipeline</a>
   </nav>
 </header>
 
 <div class="container">
+
+  <div class="upload-panel">
+    <label>
+      Video dosyası
+      <input type="file" id="videoFile" accept="video/mp4,video/*,.mp4,.avi,.mov,.mkv">
+    </label>
+    <label>
+      Paket kaybı: <span class="loss-val" id="lossVal">%25</span>
+      <input type="range" id="lossSlider" min="5" max="40" value="25">
+    </label>
+    <button type="button" class="btn btn-upload" id="btnProcess">Yüklenen videoyu işle</button>
+    <button type="button" class="btn btn-stop" id="btnDefault">Varsayılan: input.mp4</button>
+    <p class="upload-hint" id="sourceHint">Aktif kaynak: —</p>
+    <div id="jobStatus"></div>
+  </div>
+
   <!-- Score Cards -->
   <div class="score-row">
     <div class="scard red">
-      <div class="sl">🔴 Bozuk PSNR</div>
+      <div class="sl">Bozuk PSNR</div>
       <div class="sv" id="sc1">—</div>
       <div class="ss">dB (başlangıç)</div>
     </div>
     <div class="scard green">
-      <div class="sl">✅ VSR Sonrası PSNR</div>
+      <div class="sl">VSR sonrası PSNR</div>
       <div class="sv" id="sc2">—</div>
-      <div class="ss">dB (yapay zeka)</div>
+      <div class="ss">dB (VSR)</div>
     </div>
     <div class="scard yellow">
       <div class="sl">⬆ Kazanım</div>
@@ -149,12 +180,12 @@ input[type=range]{flex:1;accent-color:#6366f1;cursor:pointer;}
 
     <div class="frames-row">
       <div class="frame-panel" id="corrPanel">
-        <div class="frame-label label-corr">🔴 Bozuk — Paket Kayıplı</div>
+        <div class="frame-label label-corr">Bozuk — paket kayıplı</div>
         <canvas id="corrCanvas"></canvas>
       </div>
       <div class="frame-divider"></div>
       <div class="frame-panel" id="restPanel">
-        <div class="frame-label label-rest">✅ VSR Yapay Zeka Onarımı</div>
+        <div class="frame-label label-rest">VSR onarımı</div>
         <canvas id="restCanvas"></canvas>
       </div>
     </div>
@@ -195,6 +226,7 @@ let playing = false;
 let intervalId = null;
 let playFps = 15;
 let loaded = 0;
+let pollTimer = null;
 
 const corrCanvas = document.getElementById('corrCanvas');
 const restCanvas = document.getElementById('restCanvas');
@@ -203,62 +235,110 @@ const restCtx = restCanvas.getContext('2d');
 
 function pad(n) { return String(n).padStart(4,'0'); }
 
+function resetPlayerState() {
+  if (playing) pausePlay();
+  corrFrames = [];
+  restFrames = [];
+  totalFrames = 0;
+  currentFrame = 0;
+  loaded = 0;
+  document.getElementById('scrubber').value = 0;
+  document.getElementById('scrubber').max = 0;
+}
+
 async function loadAll() {
-  // 1. Meta
+  resetPlayerState();
+  const verboseEl = document.getElementById('loadingVerbose');
+  if (verboseEl) {
+    verboseEl.innerHTML = `[${new Date().toLocaleTimeString()}] Kareler sunucudan talep ediliyor...\n`;
+    verboseEl.lastMsg = '';
+  }
+  document.getElementById('loadingScreen').style.display = 'flex';
+  document.getElementById('progressFill').style.width = '0%';
+
   let meta;
   try {
-    const r = await fetch('/frames/meta.json');
+    const r = await fetch('/frames/meta.json?t=' + Date.now());
+    if (!r.ok) throw new Error('meta yok');
     meta = await r.json();
   } catch(e) {
-    document.getElementById('loadingMsg').innerHTML =
-      'Kareler bulunamadı.<br>Önce şunu çalıştır:<br><code>python make_web_frames.py</code>';
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('jobStatus').textContent =
+      'Henüz kare yok — yukarıdan video yükleyin.';
     return;
   }
   totalFrames = meta.n_frames;
-  document.getElementById('scrubber').max = totalFrames - 1;
+  document.getElementById('scrubber').max = Math.max(0, totalFrames - 1);
 
-  // 2. Her kareyi yükle
   const total = totalFrames * 2;
-  for (let i = 0; i < totalFrames; i++) {
-    const ci = loadImg(`/frames/corr/${pad(i)}.jpg`);
-    const ri = loadImg(`/frames/rest/${pad(i)}.jpg`);
-    const [cimg, rimg] = await Promise.all([ci, ri]);
-    corrFrames.push(cimg);
-    restFrames.push(rimg);
-    loaded += 2;
+  const bust = '?t=' + Date.now();
+  const BATCH = 24;
 
-    // Canvas boyutunu ilk kareden al
-    if (i === 0) {
-      corrCanvas.width  = cimg.width;
-      corrCanvas.height = cimg.height;
-      restCanvas.width  = rimg.width;
-      restCanvas.height = rimg.height;
-      drawFrame(0);
-    }
-
-    // İlerleme
+  function setProgress() {
     const pct = Math.round(loaded / total * 100);
     document.getElementById('progressFill').style.width = pct + '%';
     document.getElementById('progressTxt').textContent = `${loaded} / ${total} kare`;
     document.getElementById('loadingMsg').innerHTML =
-      `Kareler yükleniyor... %${pct}<br><small>${loaded} / ${total}</small>`;
+      `Kareler yükleniyor... %${pct}<br><small>${loaded} / ${total} (tarayıcı önbelleğe alıyor)</small>`;
+    
+    if (verboseEl && loaded % 24 === 0) {
+      verboseEl.innerHTML += `[${new Date().toLocaleTimeString()}] Kareler indiriliyor: ${loaded} / ${total} (%${pct})\n`;
+      verboseEl.scrollTop = verboseEl.scrollHeight;
+    }
+  }
+
+  corrFrames = new Array(totalFrames);
+  restFrames = new Array(totalFrames);
+
+  for (let start = 0; start < totalFrames; start += BATCH) {
+    const end = Math.min(start + BATCH, totalFrames);
+    const tasks = [];
+    for (let i = start; i < end; i++) {
+      tasks.push((async () => {
+        const [cimg, rimg] = await Promise.all([
+          loadImg(`/frames/corr/${pad(i)}.jpg${bust}`),
+          loadImg(`/frames/rest/${pad(i)}.jpg${bust}`),
+        ]);
+        corrFrames[i] = cimg;
+        restFrames[i] = rimg;
+        loaded += 2;
+        if (cimg && corrCanvas.width !== cimg.width) {
+          corrCanvas.width = cimg.width;
+          corrCanvas.height = cimg.height;
+          restCanvas.width = rimg ? rimg.width : cimg.width;
+          restCanvas.height = rimg ? rimg.height : cimg.height;
+          drawFrame(0);
+        }
+      })());
+    }
+    await Promise.all(tasks);
+    setProgress();
   }
 
   // Hazır
   document.getElementById('loadingScreen').style.display = 'none';
+  const src = meta.source ? ` | ${meta.source}` : '';
   document.getElementById('phMeta').textContent =
-    `${totalFrames} kare | ${meta.fps} fps | 640×360`;
+    `${totalFrames} kare | ${meta.fps} fps${src}`;
   document.getElementById('frameInfo').textContent = `0 / ${totalFrames-1}`;
 
   // Metrics
   loadMetrics();
 }
 
-function loadImg(url) {
-  return new Promise((res, rej) => {
+function loadImg(url, timeoutMs = 12000) {
+  return new Promise((res) => {
     const img = new Image();
-    img.onload  = () => res(img);
-    img.onerror = () => res(null);  // hata durumunda null (atla)
+    let done = false;
+    const finish = (val) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      res(val);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    img.onload = () => finish(img);
+    img.onerror = () => finish(null);
     img.src = url;
   });
 }
@@ -266,8 +346,20 @@ function loadImg(url) {
 function drawFrame(n) {
   const c = corrFrames[n];
   const r = restFrames[n];
-  if (c) corrCtx.drawImage(c, 0, 0);
-  if (r) restCtx.drawImage(r, 0, 0);
+  if (c) {
+    if (corrCanvas.width !== c.width || corrCanvas.height !== c.height) {
+      corrCanvas.width = c.width;
+      corrCanvas.height = c.height;
+    }
+    corrCtx.drawImage(c, 0, 0);
+  }
+  if (r) {
+    if (restCanvas.width !== r.width || restCanvas.height !== r.height) {
+      restCanvas.width = r.width;
+      restCanvas.height = r.height;
+    }
+    restCtx.drawImage(r, 0, 0);
+  }
   document.getElementById('scrubber').value = n;
   document.getElementById('frameInfo').textContent = `${n} / ${totalFrames-1}`;
 }
@@ -308,10 +400,11 @@ function setFps(v) {
 
 async function loadMetrics() {
   try {
-    const r = await fetch('/api/comparison');
+    const r = await fetch('/api/comparison?t=' + Date.now());
     if (!r.ok) return;
     const d = await r.json();
     const wr = d[d.winner];
+    if (!wr) return;
     document.getElementById('sc1').textContent = wr.base_psnr.toFixed(1);
     document.getElementById('sc2').textContent = wr.psnr.toFixed(1);
     document.getElementById('sc3').textContent = '+' + wr.psnr_gain.toFixed(2);
@@ -319,6 +412,159 @@ async function loadMetrics() {
   } catch(e) {}
 }
 
+document.getElementById('lossSlider').addEventListener('input', (e) => {
+  document.getElementById('lossVal').textContent = '%' + e.target.value;
+});
+
+async function pollJob() {
+  const r = await fetch('/api/comparison/status?t=' + Date.now());
+  const j = await r.json();
+  const el = document.getElementById('jobStatus');
+  if (j.status === 'processing') {
+    const pct = j.progress || 0;
+    el.textContent = `${pct}% — ${j.message || 'İşleniyor...'}`;
+    document.getElementById('loadingMsg').innerHTML =
+      `Video İşleniyor...<br><small>${j.message || 'VSR modeli çalışıyor'}</small>`;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressTxt').textContent = pct + '%';
+
+    const verboseEl = document.getElementById('loadingVerbose');
+    if (verboseEl) {
+      const msg = j.message || 'İşleniyor...';
+      if (verboseEl.lastMsg !== msg) {
+        verboseEl.lastMsg = msg;
+        const timeStr = new Date().toLocaleTimeString();
+        verboseEl.innerHTML += `[${timeStr}] [${pct}%] ${msg}\n`;
+        verboseEl.scrollTop = verboseEl.scrollHeight;
+      }
+    }
+    return false;
+  }
+  if (j.status === 'done') {
+    el.textContent = j.message || 'Tamamlandı.';
+    const verboseEl = document.getElementById('loadingVerbose');
+    if (verboseEl) {
+      verboseEl.innerHTML += `[${new Date().toLocaleTimeString()}] [100%] Tamamlandı!\n`;
+      verboseEl.scrollTop = verboseEl.scrollHeight;
+    }
+    return true;
+  }
+  if (j.status === 'error') {
+    el.textContent = 'Hata: ' + (j.error || j.message || 'bilinmiyor');
+    const verboseEl = document.getElementById('loadingVerbose');
+    if (verboseEl) {
+      verboseEl.innerHTML += `[${new Date().toLocaleTimeString()}] [HATA] ${j.error || j.message || 'bilinmiyor'}\n`;
+      verboseEl.scrollTop = verboseEl.scrollHeight;
+    }
+    setButtonsEnabled(true);
+    throw new Error(j.error || 'islem hatasi');
+  }
+  return null;
+}
+
+function setButtonsEnabled(on) {
+  document.getElementById('btnProcess').disabled = !on;
+  document.getElementById('btnDefault').disabled = !on;
+}
+
+function getLoss() {
+  return parseInt(document.getElementById('lossSlider').value, 10) / 100;
+}
+
+async function refreshSourceHint() {
+  try {
+    const r = await fetch('/api/video-source?t=' + Date.now());
+    const s = await r.json();
+    const el = document.getElementById('sourceHint');
+    if (!s.default_exists) {
+      el.textContent = 'Uyarı: input.mp4 proje kökünde yok.';
+      document.getElementById('btnDefault').disabled = true;
+      return;
+    }
+    const active = s.frames_source || s.active || 'input.mp4';
+    const tag = s.is_default ? ' (varsayılan)' : ' (yüklenen)';
+    el.textContent = `Aktif kaynak: ${active}${s.frames_source ? tag : ''}`;
+    document.getElementById('btnDefault').disabled = false;
+  } catch (e) {
+    document.getElementById('sourceHint').textContent = 'Aktif kaynak: input.mp4 (varsayılan)';
+  }
+}
+
+function beginPolling() {
+  const verboseEl = document.getElementById('loadingVerbose');
+  if (verboseEl) {
+    verboseEl.innerHTML = `[${new Date().toLocaleTimeString()}] Video işleme kuyruğu başlatıldı...\n`;
+    verboseEl.lastMsg = '';
+  }
+  document.getElementById('loadingMsg').innerHTML =
+    'Video işleniyor...<br><small>VSR modeli çalışıyor</small>';
+  document.getElementById('loadingScreen').style.display = 'flex';
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const done = await pollJob();
+      if (done === true) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        setButtonsEnabled(true);
+        await refreshSourceHint();
+        await loadAll();
+      }
+    } catch (err) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      setButtonsEnabled(true);
+      document.getElementById('loadingScreen').style.display = 'none';
+    }
+  }, 1500);
+}
+
+async function startUpload() {
+  const fileInput = document.getElementById('videoFile');
+  if (!fileInput.files || !fileInput.files[0]) {
+    alert('Lütfen bir video dosyası seçin veya "Varsayılan: input.mp4" kullanın.');
+    return;
+  }
+  setButtonsEnabled(false);
+  document.getElementById('jobStatus').textContent = 'Yükleniyor...';
+
+  const fd = new FormData();
+  fd.append('video', fileInput.files[0]);
+  fd.append('loss', String(getLoss()));
+  fd.append('max_frames', '150');
+  fd.append('resize', '0.5');
+
+  const up = await fetch('/api/comparison/upload', { method: 'POST', body: fd });
+  const body = await up.json();
+  if (!up.ok) {
+    setButtonsEnabled(true);
+    document.getElementById('jobStatus').textContent = body.error || 'Yükleme başarısız';
+    return;
+  }
+  beginPolling();
+}
+
+async function startDefault() {
+  setButtonsEnabled(false);
+  document.getElementById('jobStatus').textContent = 'input.mp4 işleniyor...';
+  const up = await fetch('/api/comparison/default', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ loss: getLoss(), max_frames: 150, resize: 0.5 }),
+  });
+  const body = await up.json();
+  if (!up.ok) {
+    setButtonsEnabled(true);
+    document.getElementById('jobStatus').textContent = body.error || 'İşlem başarısız';
+    return;
+  }
+  beginPolling();
+}
+
+document.getElementById('btnProcess').addEventListener('click', startUpload);
+document.getElementById('btnDefault').addEventListener('click', startDefault);
+
+refreshSourceHint();
 loadAll();
 </script>
 </body>
